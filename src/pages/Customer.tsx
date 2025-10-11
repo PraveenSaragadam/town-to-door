@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { MapPin, Search, Star, Plus, Minus, ShoppingCart, Package } from "lucide-react";
+import { MapPin, Search, Star, Plus, Minus, ShoppingCart, Package, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 
@@ -52,6 +54,10 @@ const Customer = () => {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("stores");
+  const [aiRecommendations, setAiRecommendations] = useState<string>("");
+  const [loadingAI, setLoadingAI] = useState(false);
+  const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -132,6 +138,95 @@ const Customer = () => {
       await supabase.from('cart_items').update({ quantity: newQuantity }).eq('id', itemId);
     }
     fetchCart();
+  };
+
+  const getAIRecommendations = async () => {
+    if (!user || cartItems.length === 0) return;
+    
+    setLoadingAI(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-recommendations', {
+        body: {
+          type: 'customer_recommendations',
+          data: {
+            cartItems: cartItems.map(item => ({ name: item.products.name, category: item.products.category })),
+            availableProducts: products.slice(0, 20).map(p => ({ name: p.name, category: p.category }))
+          }
+        }
+      });
+
+      if (error) throw error;
+      setAiRecommendations(data.suggestion);
+    } catch (error: any) {
+      toast.error("Failed to get AI recommendations");
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!user || cartItems.length === 0 || !deliveryAddress) {
+      toast.error("Please provide delivery address");
+      return;
+    }
+
+    try {
+      // Group cart items by store
+      const itemsByStore: { [key: string]: CartItem[] } = {};
+      cartItems.forEach(item => {
+        const storeId = item.products.store_id;
+        if (!itemsByStore[storeId]) itemsByStore[storeId] = [];
+        itemsByStore[storeId].push(item);
+      });
+
+      // Create separate orders for each store
+      for (const storeId in itemsByStore) {
+        const storeItems = itemsByStore[storeId];
+        const orderTotal = storeItems.reduce((sum, item) => sum + (item.quantity * item.price_snapshot), 0);
+
+        // Create order
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            customer_id: user.id,
+            store_id: storeId,
+            total_amount: orderTotal,
+            delivery_address: deliveryAddress,
+            status: 'pending'
+          })
+          .select()
+          .single();
+
+        if (orderError) throw orderError;
+
+        // Create order items
+        const orderItems = storeItems.map(item => ({
+          order_id: order.id,
+          product_id: item.products.id,
+          product_name: item.products.name,
+          quantity: item.quantity,
+          price: item.price_snapshot
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(orderItems);
+
+        if (itemsError) throw itemsError;
+
+        // Clear cart items for this store
+        const cartItemIds = storeItems.map(item => item.id);
+        await supabase.from('cart_items').delete().in('id', cartItemIds);
+      }
+
+      toast.success("Orders placed successfully!");
+      setCheckoutDialogOpen(false);
+      setDeliveryAddress("");
+      fetchCart();
+      setCartOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || "Checkout failed");
+    }
   };
 
   const filteredProducts = products.filter(product => {
@@ -314,13 +409,74 @@ const Customer = () => {
                 <span>Total:</span>
                 <span>${cartTotal.toFixed(2)}</span>
               </div>
-              <Button className="w-full" size="lg">
+              
+              <Button 
+                className="w-full" 
+                size="lg" 
+                variant="outline"
+                onClick={getAIRecommendations}
+                disabled={loadingAI}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {loadingAI ? "Getting AI Suggestions..." : "Get AI Recommendations"}
+              </Button>
+
+              {aiRecommendations && (
+                <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    AI Suggests:
+                  </h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">{aiRecommendations}</p>
+                </div>
+              )}
+
+              <Button 
+                className="w-full" 
+                size="lg"
+                onClick={() => setCheckoutDialogOpen(true)}
+              >
                 Proceed to Checkout
               </Button>
             </div>
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Checkout Dialog */}
+      <Dialog open={checkoutDialogOpen} onOpenChange={setCheckoutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Your Order</DialogTitle>
+            <DialogDescription>
+              Enter your delivery address to complete the checkout
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Delivery Address</label>
+              <Textarea
+                placeholder="Enter your complete delivery address..."
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-between text-lg font-bold pt-2">
+              <span>Order Total:</span>
+              <span className="text-primary">${cartTotal.toFixed(2)}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCheckout} disabled={!deliveryAddress}>
+              Place Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

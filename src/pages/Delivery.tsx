@@ -6,8 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { MapPin, Package, Star, CheckCircle, Truck } from "lucide-react";
+import { MapPin, Package, Star, CheckCircle, Truck, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Order {
   id: string;
@@ -24,6 +25,8 @@ const Delivery = () => {
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
+  const [aiRouteSuggestion, setAiRouteSuggestion] = useState<string>("");
+  const [loadingAI, setLoadingAI] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -133,6 +136,38 @@ const Delivery = () => {
     return <Badge variant={variant as any}>{label}</Badge>;
   };
 
+  const getAIRouteSuggestion = async () => {
+    if (activeOrders.length === 0) {
+      toast.error("No active orders to optimize");
+      return;
+    }
+    
+    setLoadingAI(true);
+    try {
+      const locations = activeOrders.map(order => ({
+        address: order.delivery_address,
+        customer: order.profiles.full_name
+      }));
+
+      const { data, error } = await supabase.functions.invoke('ai-recommendations', {
+        body: {
+          type: 'delivery_route',
+          data: {
+            orderCount: activeOrders.length,
+            locations
+          }
+        }
+      });
+
+      if (error) throw error;
+      setAiRouteSuggestion(data.suggestion);
+    } catch (error: any) {
+      toast.error("Failed to get route suggestions");
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
@@ -180,6 +215,35 @@ const Delivery = () => {
             </CardContent>
           </Card>
         </div>
+
+        {activeOrders.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                AI Route Optimization
+              </CardTitle>
+              <CardDescription>
+                Get smart delivery route suggestions for your active orders
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={getAIRouteSuggestion} disabled={loadingAI} className="mb-4">
+                <Sparkles className="h-4 w-4 mr-2" />
+                {loadingAI ? "Optimizing..." : "Optimize My Route"}
+              </Button>
+              {aiRouteSuggestion && (
+                <Alert>
+                  <Truck className="h-4 w-4" />
+                  <AlertTitle>Route Suggestion</AlertTitle>
+                  <AlertDescription className="whitespace-pre-line mt-2">
+                    {aiRouteSuggestion}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="available">
           <TabsList>

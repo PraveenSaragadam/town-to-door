@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, Package, TrendingUp, AlertCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Package, TrendingUp, AlertCircle, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Product {
   id: string;
@@ -32,6 +33,8 @@ const Retailer = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [storeDialogOpen, setStoreDialogOpen] = useState(false);
+  const [aiInsights, setAiInsights] = useState<string>("");
+  const [loadingAI, setLoadingAI] = useState(false);
   const [storeFormData, setStoreFormData] = useState({
     name: '',
     address: '',
@@ -197,6 +200,33 @@ const Retailer = () => {
     });
   };
 
+  const getAIInsights = async () => {
+    if (!products.length) return;
+    
+    setLoadingAI(true);
+    try {
+      const lowStock = products.filter(p => p.stock_quantity < 10)
+        .map(p => ({ name: p.name, stock: p.stock_quantity }));
+      
+      const { data, error } = await supabase.functions.invoke('ai-recommendations', {
+        body: {
+          type: 'retailer_insights',
+          data: {
+            lowStock,
+            recentSales: products.slice(0, 5).map(p => ({ name: p.name, price: p.price }))
+          }
+        }
+      });
+
+      if (error) throw error;
+      setAiInsights(data.suggestion);
+    } catch (error: any) {
+      toast.error("Failed to get AI insights");
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
   const lowStockProducts = products.filter(p => p.stock_quantity < 10);
 
   if (loading) {
@@ -333,6 +363,41 @@ const Retailer = () => {
             </CardContent>
           </Card>
         </div>
+
+        {lowStockProducts.length > 0 && (
+          <Alert className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Low Stock Warning</AlertTitle>
+            <AlertDescription>
+              You have {lowStockProducts.length} product(s) with low stock. Consider restocking soon.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {products.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                AI Business Insights
+              </CardTitle>
+              <CardDescription>
+                Get AI-powered recommendations for your inventory and sales
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={getAIInsights} disabled={loadingAI} className="mb-4">
+                <Sparkles className="h-4 w-4 mr-2" />
+                {loadingAI ? "Analyzing..." : "Get AI Insights"}
+              </Button>
+              {aiInsights && (
+                <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+                  <p className="text-sm whitespace-pre-line">{aiInsights}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="products">
           <TabsList>
