@@ -31,6 +31,15 @@ const Retailer = () => {
   const [storeId, setStoreId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [storeDialogOpen, setStoreDialogOpen] = useState(false);
+  const [storeFormData, setStoreFormData] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    description: '',
+    location_lat: '40.7128',
+    location_lon: '-74.0060',
+  });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -57,13 +66,42 @@ const Retailer = () => {
   const fetchStore = async () => {
     if (!user) return;
     
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('stores')
       .select('id')
       .eq('owner_id', user.id)
-      .single();
+      .maybeSingle();
     
     if (data) setStoreId(data.id);
+  };
+
+  const handleStoreSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('stores')
+        .insert({
+          owner_id: user.id,
+          name: storeFormData.name,
+          address: storeFormData.address,
+          phone: storeFormData.phone,
+          description: storeFormData.description,
+          location_lat: parseFloat(storeFormData.location_lat),
+          location_lon: parseFloat(storeFormData.location_lon),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      toast.success("Store created successfully!");
+      setStoreId(data.id);
+      setStoreDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   };
 
   const fetchProducts = async () => {
@@ -163,6 +201,89 @@ const Retailer = () => {
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+
+  if (!storeId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header userRole="retailer" />
+        <main className="container py-8 px-4">
+          <Card className="max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle>Welcome! Let's Create Your Store</CardTitle>
+              <CardDescription>
+                You need to set up your store before you can add products
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleStoreSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="store-name">Store Name</Label>
+                  <Input
+                    id="store-name"
+                    value={storeFormData.name}
+                    onChange={(e) => setStoreFormData({ ...storeFormData, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address</Label>
+                  <Input
+                    id="address"
+                    value={storeFormData.address}
+                    onChange={(e) => setStoreFormData({ ...storeFormData, address: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={storeFormData.phone}
+                    onChange={(e) => setStoreFormData({ ...storeFormData, phone: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={storeFormData.description}
+                    onChange={(e) => setStoreFormData({ ...storeFormData, description: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="lat">Latitude</Label>
+                    <Input
+                      id="lat"
+                      type="number"
+                      step="any"
+                      value={storeFormData.location_lat}
+                      onChange={(e) => setStoreFormData({ ...storeFormData, location_lat: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lon">Longitude</Label>
+                    <Input
+                      id="lon"
+                      type="number"
+                      step="any"
+                      value={storeFormData.location_lon}
+                      onChange={(e) => setStoreFormData({ ...storeFormData, location_lon: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full">Create Store</Button>
+              </form>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
   }
 
   return (
