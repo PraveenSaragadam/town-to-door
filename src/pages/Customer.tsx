@@ -14,6 +14,12 @@ import { toast } from "sonner";
 import { MapPin, Search, Star, Plus, Minus, ShoppingCart, Package, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import { z } from "zod";
+
+const checkoutSchema = z.object({
+  deliveryAddress: z.string().trim().min(5, "Delivery address is required").max(500, "Address too long")
+});
 
 interface Store {
   id: string;
@@ -165,12 +171,16 @@ const Customer = () => {
   };
 
   const handleCheckout = async () => {
-    if (!user || cartItems.length === 0 || !deliveryAddress) {
-      toast.error("Please provide delivery address");
-      return;
-    }
+    if (!user || cartItems.length === 0) return;
 
     try {
+      // Validate delivery address
+      const validation = checkoutSchema.safeParse({ deliveryAddress });
+      if (!validation.success) {
+        toast.error(validation.error.errors[0].message);
+        return;
+      }
+
       // Group cart items by store
       const itemsByStore: { [key: string]: CartItem[] } = {};
       cartItems.forEach(item => {

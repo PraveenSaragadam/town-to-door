@@ -14,6 +14,23 @@ import { toast } from "sonner";
 import { Plus, Edit, Trash2, Package, TrendingUp, AlertCircle, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { z } from "zod";
+
+const storeSchema = z.object({
+  name: z.string().trim().min(1, "Store name is required").max(200, "Store name too long"),
+  address: z.string().trim().min(1, "Address is required").max(500, "Address too long"),
+  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format").optional().or(z.literal("")),
+  description: z.string().max(1000, "Description too long").optional()
+});
+
+const productSchema = z.object({
+  name: z.string().trim().min(1, "Product name is required").max(200, "Product name too long"),
+  sku: z.string().trim().min(1, "SKU is required").max(50, "SKU too long"),
+  price: z.number({ invalid_type_error: "Price must be a number" }).positive("Price must be positive").max(999999.99, "Price too high"),
+  stock_quantity: z.number({ invalid_type_error: "Stock must be a number" }).int("Stock must be a whole number").min(0, "Stock cannot be negative").max(999999, "Stock value too high"),
+  description: z.string().max(2000, "Description too long").optional(),
+  category: z.enum(["groceries", "electronics", "clothing", "home", "other"], { errorMap: () => ({ message: "Please select a category" }) })
+});
 
 interface Product {
   id: string;
@@ -83,14 +100,21 @@ const Retailer = () => {
     if (!user) return;
 
     try {
+      // Validate input
+      const validation = storeSchema.safeParse(storeFormData);
+      if (!validation.success) {
+        toast.error(validation.error.errors[0].message);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('stores')
         .insert({
           owner_id: user.id,
           name: storeFormData.name,
           address: storeFormData.address,
-          phone: storeFormData.phone,
-          description: storeFormData.description,
+          phone: storeFormData.phone || null,
+          description: storeFormData.description || null,
           location_lat: parseFloat(storeFormData.location_lat),
           location_lon: parseFloat(storeFormData.location_lon),
         })
@@ -124,21 +148,35 @@ const Retailer = () => {
     if (!storeId) return;
 
     try {
+      // Validate input
       const productData = {
-        store_id: storeId,
-        sku: formData.sku,
         name: formData.name,
-        description: formData.description,
+        sku: formData.sku,
         price: parseFloat(formData.price),
         stock_quantity: parseInt(formData.stock_quantity),
-        category: formData.category as any,
-        is_available: true,
+        description: formData.description,
+        category: formData.category
       };
+      
+      const validation = productSchema.safeParse(productData);
+      if (!validation.success) {
+        toast.error(validation.error.errors[0].message);
+        return;
+      }
 
       if (editingProduct) {
         const { error } = await supabase
           .from('products')
-          .update(productData)
+          .update({
+            store_id: storeId,
+            sku: productData.sku,
+            name: productData.name,
+            description: productData.description,
+            price: productData.price,
+            stock_quantity: productData.stock_quantity,
+            category: productData.category as any,
+            is_available: true,
+          })
           .eq('id', editingProduct.id);
 
         if (error) throw error;
@@ -146,7 +184,16 @@ const Retailer = () => {
       } else {
         const { error } = await supabase
           .from('products')
-          .insert(productData);
+          .insert({
+            store_id: storeId,
+            sku: productData.sku,
+            name: productData.name,
+            description: productData.description,
+            price: productData.price,
+            stock_quantity: productData.stock_quantity,
+            category: productData.category as any,
+            is_available: true,
+          });
 
         if (error) throw error;
         toast.success("Product added successfully!");
