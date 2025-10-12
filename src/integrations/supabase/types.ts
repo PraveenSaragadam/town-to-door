@@ -140,11 +140,14 @@ export type Database = {
           created_at: string | null
           customer_id: string
           delivery_address: string
+          delivery_earning: number | null
           delivery_lat: number | null
           delivery_lon: number | null
           delivery_person_id: string | null
           id: string
           notes: string | null
+          paid_amount: number | null
+          payment_status: string | null
           status: Database["public"]["Enums"]["order_status"] | null
           store_id: string
           total_amount: number
@@ -154,11 +157,14 @@ export type Database = {
           created_at?: string | null
           customer_id: string
           delivery_address: string
+          delivery_earning?: number | null
           delivery_lat?: number | null
           delivery_lon?: number | null
           delivery_person_id?: string | null
           id?: string
           notes?: string | null
+          paid_amount?: number | null
+          payment_status?: string | null
           status?: Database["public"]["Enums"]["order_status"] | null
           store_id: string
           total_amount: number
@@ -168,17 +174,27 @@ export type Database = {
           created_at?: string | null
           customer_id?: string
           delivery_address?: string
+          delivery_earning?: number | null
           delivery_lat?: number | null
           delivery_lon?: number | null
           delivery_person_id?: string | null
           id?: string
           notes?: string | null
+          paid_amount?: number | null
+          payment_status?: string | null
           status?: Database["public"]["Enums"]["order_status"] | null
           store_id?: string
           total_amount?: number
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "retailer_revenue"
+            referencedColumns: ["store_id"]
+          },
           {
             foreignKeyName: "orders_store_id_fkey"
             columns: ["store_id"]
@@ -195,6 +211,7 @@ export type Database = {
           description: string | null
           id: string
           image_url: string | null
+          images: string[] | null
           is_available: boolean | null
           name: string
           price: number
@@ -209,6 +226,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          images?: string[] | null
           is_available?: boolean | null
           name: string
           price: number
@@ -223,6 +241,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          images?: string[] | null
           is_available?: boolean | null
           name?: string
           price?: number
@@ -232,6 +251,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "products_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "retailer_revenue"
+            referencedColumns: ["store_id"]
+          },
           {
             foreignKeyName: "products_store_id_fkey"
             columns: ["store_id"]
@@ -361,6 +387,13 @@ export type Database = {
             foreignKeyName: "sales_records_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
+            referencedRelation: "retailer_revenue"
+            referencedColumns: ["store_id"]
+          },
+          {
+            foreignKeyName: "sales_records_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id"]
           },
@@ -443,7 +476,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      delivery_earnings: {
+        Row: {
+          completed_deliveries: number | null
+          delivery_person_id: string | null
+          full_name: string | null
+          total_deliveries: number | null
+          total_earnings: number | null
+        }
+        Relationships: []
+      }
+      retailer_revenue: {
+        Row: {
+          completed_orders: number | null
+          confirmed_revenue: number | null
+          owner_id: string | null
+          store_id: string | null
+          store_name: string | null
+          total_orders: number | null
+          total_revenue: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {

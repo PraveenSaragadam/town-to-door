@@ -15,9 +15,16 @@ interface Order {
   status: string;
   total_amount: number;
   delivery_address: string;
+  delivery_earning: number;
   created_at: string;
   stores: { name: string; address: string };
   profiles: { full_name: string; phone: string };
+}
+
+interface Earnings {
+  total_deliveries: number;
+  completed_deliveries: number;
+  total_earnings: number;
 }
 
 const Delivery = () => {
@@ -27,10 +34,12 @@ const Delivery = () => {
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [aiRouteSuggestion, setAiRouteSuggestion] = useState<string>("");
   const [loadingAI, setLoadingAI] = useState(false);
+  const [earnings, setEarnings] = useState<Earnings | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchOrders();
+      fetchEarnings();
       
       // Subscribe to real-time order updates
       const channel = supabase
@@ -44,6 +53,7 @@ const Delivery = () => {
           },
           () => {
             fetchOrders();
+            fetchEarnings();
           }
         )
         .subscribe();
@@ -85,6 +95,18 @@ const Delivery = () => {
       .limit(10);
 
     if (completed) setCompletedOrders(completed as any);
+  };
+
+  const fetchEarnings = async () => {
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from('delivery_earnings')
+      .select('*')
+      .eq('delivery_person_id', user.id)
+      .single();
+    
+    if (data) setEarnings(data);
   };
 
   const acceptOrder = async (orderId: string) => {
@@ -184,7 +206,7 @@ const Delivery = () => {
           <p className="text-muted-foreground">Manage your deliveries and earnings</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Available Orders</CardTitle>
@@ -207,11 +229,22 @@ const Delivery = () => {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Completed Today</CardTitle>
+              <CardTitle className="text-sm font-medium">Completed Deliveries</CardTitle>
               <CheckCircle className="h-4 w-4 text-success" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{completedOrders.length}</div>
+              <div className="text-2xl font-bold text-success">{earnings?.completed_deliveries || 0}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
+              <CheckCircle className="h-4 w-4 text-success" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-success">${earnings?.total_earnings?.toFixed(2) || '0.00'}</div>
+              <p className="text-xs text-muted-foreground mt-1">From delivered orders</p>
             </CardContent>
           </Card>
         </div>

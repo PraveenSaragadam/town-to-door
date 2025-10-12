@@ -194,7 +194,11 @@ const Customer = () => {
         const storeItems = itemsByStore[storeId];
         const orderTotal = storeItems.reduce((sum, item) => sum + (item.quantity * item.price_snapshot), 0);
 
-        // Create order
+        // Simulate payment (in real app, integrate payment gateway)
+        const deliveryFee = 5; // Fixed delivery fee
+        const paymentSuccessful = true; // Simulate successful payment
+
+        // Create order with payment info
         const { data: order, error: orderError } = await supabase
           .from('orders')
           .insert({
@@ -202,7 +206,10 @@ const Customer = () => {
             store_id: storeId,
             total_amount: orderTotal,
             delivery_address: deliveryAddress,
-            status: 'pending'
+            status: 'pending',
+            payment_status: paymentSuccessful ? 'paid' : 'pending',
+            paid_amount: paymentSuccessful ? orderTotal : null,
+            delivery_earning: deliveryFee
           })
           .select()
           .single();
@@ -229,7 +236,7 @@ const Customer = () => {
         await supabase.from('cart_items').delete().in('id', cartItemIds);
       }
 
-      toast.success("Orders placed successfully!");
+      toast.success("Orders placed successfully! Payment processed.");
       setCheckoutDialogOpen(false);
       setDeliveryAddress("");
       fetchCart();

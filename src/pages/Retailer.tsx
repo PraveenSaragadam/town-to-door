@@ -10,8 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, Package, TrendingUp, AlertCircle, Sparkles } from "lucide-react";
+import { Plus, Edit, Trash2, Package, TrendingUp, AlertCircle, Sparkles, CheckCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { z } from "zod";
@@ -43,6 +44,13 @@ interface Product {
   is_available: boolean;
 }
 
+interface Revenue {
+  total_orders: number;
+  completed_orders: number;
+  total_revenue: number;
+  confirmed_revenue: number;
+}
+
 const Retailer = () => {
   const { user, loading } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -52,6 +60,9 @@ const Retailer = () => {
   const [storeDialogOpen, setStoreDialogOpen] = useState(false);
   const [aiInsights, setAiInsights] = useState<string>("");
   const [loadingAI, setLoadingAI] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [revenue, setRevenue] = useState<Revenue | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [storeFormData, setStoreFormData] = useState({
     name: '',
     address: '',
@@ -80,6 +91,30 @@ const Retailer = () => {
   useEffect(() => {
     if (storeId) {
       fetchProducts();
+      fetchOrders();
+      fetchRevenue();
+      
+      // Real-time order updates
+      const channel = supabase
+        .channel('retailer-orders')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'orders',
+            filter: `store_id=eq.${storeId}`
+          },
+          () => {
+            fetchOrders();
+            fetchRevenue();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [storeId]);
 
@@ -141,6 +176,67 @@ const Retailer = () => {
       .order('created_at', { ascending: false });
     
     if (data) setProducts(data);
+  };
+
+  const fetchOrders = async () => {
+    if (!storeId) return;
+    
+    const { data } = await supabase
+      .from('orders')
+      .select('*, profiles!customer_id(full_name, phone)')
+      .eq('store_id', storeId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    
+    if (data) setOrders(data);
+  };
+
+  const fetchRevenue = async () => {
+    if (!storeId) return;
+    
+    const { data } = await supabase
+      .from('retailer_revenue')
+      .select('*')
+      .eq('store_id', storeId)
+      .single();
+    
+    if (data) setRevenue(data);
+  };
+
+  const handleImageUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return null;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return null;
+    }
+
+    setUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError, data } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error: any) {
+      toast.error(error.message);
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -375,7 +471,7 @@ const Retailer = () => {
           <p className="text-muted-foreground">Manage your store inventory and orders</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Total Products</CardTitle>
@@ -388,19 +484,28 @@ const Retailer = () => {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">In Stock</CardTitle>
-              <TrendingUp className="h-4 w-4 text-success" />
+              <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {products.filter(p => p.stock_quantity > 0).length}
-              </div>
+              <div className="text-2xl font-bold">{revenue?.total_orders || 0}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <TrendingUp className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">${revenue?.total_revenue?.toFixed(2) || '0.00'}</div>
+              <p className="text-xs text-muted-foreground mt-1">All paid orders</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
               <AlertCircle className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
@@ -600,16 +705,45 @@ const Retailer = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="orders">
+          <TabsContent value="orders" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Recent Orders</CardTitle>
-                <CardDescription>Manage incoming orders</CardDescription>
+                <CardDescription>Real-time order updates from your store</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground text-center py-8">
-                  No orders yet. Orders will appear here once customers start shopping.
-                </p>
+                {orders.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No orders yet. Orders will appear here once customers start shopping.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {orders.map((order: any) => (
+                      <Card key={order.id}>
+                        <CardContent className="pt-6">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <p className="font-semibold">{order.profiles?.full_name}</p>
+                              <p className="text-sm text-muted-foreground">{order.profiles?.phone}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{new Date(order.created_at).toLocaleString()}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-bold">${order.total_amount.toFixed(2)}</p>
+                              <div className="flex gap-2 mt-2">
+                                <Badge variant={order.payment_status === 'paid' ? 'default' : 'secondary'}>
+                                  {order.payment_status}
+                                </Badge>
+                                <Badge variant="outline">{order.status}</Badge>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-sm">
+                            <span className="font-medium">Delivery: </span>
+                            {order.delivery_address}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
