@@ -231,6 +231,18 @@ const Customer = () => {
 
         if (itemsError) throw itemsError;
 
+        // Reduce stock for each product
+        for (const item of storeItems) {
+          const { error: stockError } = await supabase.rpc('reduce_product_stock', {
+            p_product_id: item.products.id,
+            p_quantity: item.quantity
+          });
+
+          if (stockError) {
+            console.error('Error reducing stock:', stockError);
+          }
+        }
+
         // Clear cart items for this store
         const cartItemIds = storeItems.map(item => item.id);
         await supabase.from('cart_items').delete().in('id', cartItemIds);

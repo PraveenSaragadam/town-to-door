@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Plus, Edit, Trash2, Package, TrendingUp, AlertCircle, Sparkles, CheckCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Download } from "lucide-react";
 import { z } from "zod";
 
 const storeSchema = z.object({
@@ -49,6 +50,7 @@ interface Revenue {
   completed_orders: number;
   total_revenue: number;
   confirmed_revenue: number;
+  store_name: string;
 }
 
 const Retailer = () => {
@@ -62,7 +64,8 @@ const Retailer = () => {
   const [loadingAI, setLoadingAI] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [revenue, setRevenue] = useState<Revenue | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [storeFormData, setStoreFormData] = useState({
     name: '',
     address: '',
@@ -203,39 +206,48 @@ const Retailer = () => {
     if (data) setRevenue(data);
   };
 
-  const handleImageUpload = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
-      return null;
-    }
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size must be less than 5MB');
-      return null;
-    }
+    setUploadingImages(true);
+    const urls: string[] = [];
 
-    setUploadingImage(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith('image/')) {
+          toast.error(`${file.name} is not an image file`);
+          continue;
+        }
 
-      const { error: uploadError, data } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, file);
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`${file.name} is too large (max 5MB)`);
+          continue;
+        }
 
-      if (uploadError) throw uploadError;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
+        const { error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, file);
 
-      return publicUrl;
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(filePath);
+
+        urls.push(publicUrl);
+      }
+
+      setImageUrls(prev => [...prev, ...urls]);
+      toast.success(`${urls.length} image(s) uploaded successfully`);
     } catch (error: any) {
       toast.error(error.message);
-      return null;
     } finally {
-      setUploadingImage(false);
+      setUploadingImages(false);
     }
   };
 
@@ -272,6 +284,7 @@ const Retailer = () => {
             stock_quantity: productData.stock_quantity,
             category: productData.category as any,
             is_available: true,
+            images: imageUrls.length > 0 ? imageUrls : undefined,
           })
           .eq('id', editingProduct.id);
 
@@ -289,6 +302,7 @@ const Retailer = () => {
             stock_quantity: productData.stock_quantity,
             category: productData.category as any,
             is_available: true,
+            images: imageUrls.length > 0 ? imageUrls : undefined,
           });
 
         if (error) throw error;
@@ -341,6 +355,7 @@ const Retailer = () => {
       stock_quantity: '',
       category: 'groceries',
     });
+    setImageUrls([]);
   };
 
   const getAIInsights = async () => {
@@ -500,6 +515,24 @@ const Retailer = () => {
             <CardContent>
               <div className="text-2xl font-bold">${revenue?.total_revenue?.toFixed(2) || '0.00'}</div>
               <p className="text-xs text-muted-foreground mt-1">All paid orders</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-3"
+                onClick={() => {
+                  const csvData = `Store,Total Orders,Completed Orders,Total Revenue,Confirmed Revenue\n${revenue?.store_name || 'N/A'},${revenue?.total_orders || 0},${revenue?.completed_orders || 0},${revenue?.total_revenue || 0},${revenue?.confirmed_revenue || 0}`;
+                  const blob = new Blob([csvData], { type: 'text/csv' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `revenue-report-${new Date().toISOString().split('T')[0]}.csv`;
+                  a.click();
+                  toast.success("Revenue report exported");
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Report
+              </Button>
             </CardContent>
           </Card>
 
@@ -650,6 +683,33 @@ const Retailer = () => {
                           required
                         />
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="images">Product Images</Label>
+                      <Input
+                        id="images"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageUpload}
+                        disabled={uploadingImages}
+                      />
+                      {uploadingImages && (
+                        <p className="text-sm text-muted-foreground">Uploading images...</p>
+                      )}
+                      {imageUrls.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2 mt-2">
+                          {imageUrls.map((url, idx) => (
+                            <img
+                              key={idx}
+                              src={url}
+                              alt={`Product ${idx + 1}`}
+                              className="w-full h-20 object-cover rounded border"
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <DialogFooter>

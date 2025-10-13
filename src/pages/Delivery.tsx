@@ -132,15 +132,31 @@ const Delivery = () => {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
+      const updates: any = { status: newStatus as any };
+      
+      // If marking as delivered, set delivery earning
+      if (newStatus === 'delivered') {
+        const order = activeOrders.find(o => o.id === orderId);
+        if (order) {
+          updates.delivery_earning = order.total_amount * 0.1; // 10% commission
+        }
+      }
+
       const { error } = await supabase
         .from('orders')
-        .update({ status: newStatus as any })
+        .update(updates)
         .eq('id', orderId);
 
       if (error) throw error;
 
-      toast.success(`Order status updated to ${newStatus.replace('_', ' ')}`);
+      const statusMessages: Record<string, string> = {
+        'delivering': 'Started delivery! Navigate to customer location.',
+        'delivered': 'Order marked as delivered! Earnings added.'
+      };
+
+      toast.success(statusMessages[newStatus] || `Order status updated to ${newStatus.replace('_', ' ')}`);
       fetchOrders();
+      fetchEarnings();
     } catch (error: any) {
       toast.error(error.message);
     }
