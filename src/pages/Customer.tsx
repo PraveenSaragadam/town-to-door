@@ -41,6 +41,7 @@ interface Product {
   stock_quantity: number;
   category: string;
   image_url: string;
+  images: string[];
   store_id: string;
   stores: { name: string };
 }
@@ -354,13 +355,27 @@ const Customer = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredProducts.map(product => (
                 <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="h-48 bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center">
-                    <ShoppingCart className="h-16 w-16 text-primary/30" />
+                  <div className="h-48 bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center overflow-hidden">
+                    {product.images && product.images.length > 0 ? (
+                      <img 
+                        src={product.images[0]} 
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : product.image_url ? (
+                      <img 
+                        src={product.image_url} 
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <ShoppingCart className="h-16 w-16 text-primary/30" />
+                    )}
                   </div>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="text-lg line-clamp-1">{product.name}</CardTitle>
-                      <Badge variant="secondary" className="shrink-0">${product.price}</Badge>
+                      <Badge variant="secondary" className="shrink-0">₹{product.price}</Badge>
                     </div>
                     <CardDescription className="line-clamp-2 text-sm">
                       {product.description}
@@ -408,7 +423,7 @@ const Customer = () => {
                 <div className="flex-1">
                   <h4 className="font-medium">{item.products.name}</h4>
                   <p className="text-sm text-muted-foreground">{item.products.stores?.name}</p>
-                  <p className="text-sm font-medium mt-1">${item.price_snapshot.toFixed(2)}</p>
+                  <p className="text-sm font-medium mt-1">₹{item.price_snapshot.toFixed(2)}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -442,7 +457,7 @@ const Customer = () => {
               <Separator />
               <div className="flex justify-between text-lg font-bold">
                 <span>Total:</span>
-                <span>${cartTotal.toFixed(2)}</span>
+                <span>₹{cartTotal.toFixed(2)}</span>
               </div>
               
               <Button 
@@ -499,7 +514,7 @@ const Customer = () => {
             </div>
             <div className="flex justify-between text-lg font-bold pt-2">
               <span>Order Total:</span>
-              <span className="text-primary">${cartTotal.toFixed(2)}</span>
+              <span className="text-primary">₹{cartTotal.toFixed(2)}</span>
             </div>
           </div>
           <DialogFooter>

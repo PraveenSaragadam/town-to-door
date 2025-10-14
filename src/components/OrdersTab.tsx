@@ -135,7 +135,7 @@ const OrdersTab = ({ userId }: OrdersTabProps) => {
                     </CardDescription>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold">${order.total_amount.toFixed(2)}</p>
+                    <p className="text-2xl font-bold">₹{order.total_amount.toFixed(2)}</p>
                     <div className="flex gap-2 mt-2">
                       <Badge variant={order.payment_status === 'paid' ? 'default' : 'secondary'}>
                         {order.payment_status}

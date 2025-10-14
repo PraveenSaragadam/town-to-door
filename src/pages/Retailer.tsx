@@ -514,7 +514,7 @@ const Retailer = () => {
               <TrendingUp className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${revenue?.total_revenue?.toFixed(2) || '0.00'}</div>
+              <div className="text-2xl font-bold">₹{revenue?.total_revenue?.toFixed(2) || '0.00'}</div>
               <p className="text-xs text-muted-foreground mt-1">All paid orders</p>
               <Button
                 variant="outline"
@@ -743,7 +743,7 @@ const Retailer = () => {
                         <TableCell className="font-mono text-sm">{product.sku}</TableCell>
                         <TableCell className="font-medium">{product.name}</TableCell>
                         <TableCell className="capitalize">{product.category}</TableCell>
-                        <TableCell>${product.price.toFixed(2)}</TableCell>
+                        <TableCell>₹{product.price.toFixed(2)}</TableCell>
                         <TableCell>
                           <span className={product.stock_quantity < 10 ? 'text-destructive font-medium' : ''}>
                             {product.stock_quantity}
@@ -788,7 +788,7 @@ const Retailer = () => {
                               <p className="text-xs text-muted-foreground mt-1">{new Date(order.created_at).toLocaleString()}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-bold">${order.total_amount.toFixed(2)}</p>
+                              <p className="text-2xl font-bold">₹{order.total_amount.toFixed(2)}</p>
                               <div className="flex gap-2 mt-2">
                                 <Badge variant={order.payment_status === 'paid' ? 'default' : 'secondary'}>
                                   {order.payment_status}

@@ -259,7 +259,7 @@ const Delivery = () => {
               <CheckCircle className="h-4 w-4 text-success" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-success">${earnings?.total_earnings?.toFixed(2) || '0.00'}</div>
+              <div className="text-2xl font-bold text-success">₹{earnings?.total_earnings?.toFixed(2) || '0.00'}</div>
               <p className="text-xs text-muted-foreground mt-1">From delivered orders</p>
             </CardContent>
           </Card>
@@ -343,7 +343,7 @@ const Delivery = () => {
                       </div>
                     </div>
                     <div className="flex items-center justify-between pt-4 border-t">
-                      <div className="text-lg font-bold">${order.total_amount.toFixed(2)}</div>
+                      <div className="text-lg font-bold">₹{order.total_amount.toFixed(2)}</div>
                       <Button onClick={() => acceptOrder(order.id)}>
                         Accept Order
                       </Button>
@@ -440,7 +440,7 @@ const Delivery = () => {
                         <p className="text-sm font-medium">{order.stores.name}</p>
                         <p className="text-sm text-muted-foreground">→ {order.delivery_address}</p>
                       </div>
-                      <div className="text-lg font-bold">${order.total_amount.toFixed(2)}</div>
+                      <div className="text-lg font-bold">₹{order.total_amount.toFixed(2)}</div>
                     </div>
                   </CardContent>
                 </Card>
