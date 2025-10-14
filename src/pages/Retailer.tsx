@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/layout/Header";
+import RatingsTab from "@/components/RatingsTab";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,7 @@ const productSchema = z.object({
   price: z.number({ invalid_type_error: "Price must be a number" }).positive("Price must be positive").max(999999.99, "Price too high"),
   stock_quantity: z.number({ invalid_type_error: "Stock must be a number" }).int("Stock must be a whole number").min(0, "Stock cannot be negative").max(999999, "Stock value too high"),
   description: z.string().max(2000, "Description too long").optional(),
-  category: z.enum(["groceries", "electronics", "clothing", "home", "other"], { errorMap: () => ({ message: "Please select a category" }) })
+  category: z.enum(["groceries", "vegetables", "fruits", "dairy", "bakery", "snacks", "beverages"], { errorMap: () => ({ message: "Please select a category" }) })
 });
 
 interface Product {
@@ -588,6 +589,7 @@ const Retailer = () => {
           <TabsList>
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="ratings">Ratings</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
 
@@ -806,6 +808,10 @@ const Retailer = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="ratings">
+            <RatingsTab storeId={storeId} />
           </TabsContent>
 
           <TabsContent value="analytics">

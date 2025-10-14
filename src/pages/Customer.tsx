@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { z } from "zod";
+import OrdersTab from "@/components/OrdersTab";
 
 const checkoutSchema = z.object({
   deliveryAddress: z.string().trim().min(5, "Delivery address is required").max(500, "Address too long")
@@ -314,6 +315,7 @@ const Customer = () => {
           <TabsList className="mb-6">
             <TabsTrigger value="stores">Nearby Stores</TabsTrigger>
             <TabsTrigger value="products">All Products</TabsTrigger>
+            <TabsTrigger value="orders">My Orders</TabsTrigger>
           </TabsList>
 
           <TabsContent value="stores" className="space-y-6">
@@ -382,6 +384,10 @@ const Customer = () => {
                 </Card>
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="orders">
+            <OrdersTab userId={user?.id} />
           </TabsContent>
         </Tabs>
       </main>
