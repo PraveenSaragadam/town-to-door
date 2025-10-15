@@ -113,20 +113,39 @@ const Delivery = () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({
-          delivery_person_id: user.id,
-          status: 'picked_up',
-        })
-        .eq('id', orderId);
+      const { data, error } = await supabase.functions.invoke('accept-order', {
+        body: { orderId }
+      });
 
       if (error) throw error;
+
+      if (data.error === 'OrderAlreadyAssigned') {
+        toast.error(`Order already accepted by ${data.assignedTo.name}`);
+        fetchOrders();
+        return;
+      }
 
       toast.success("Order accepted! Head to the pickup location.");
       fetchOrders();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to accept order');
+    }
+  };
+
+  const rejectOrder = async (orderId: string, reason: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.functions.invoke('reject-order', {
+        body: { orderId, reason }
+      });
+
+      if (error) throw error;
+
+      toast.success("Order rejected. You won't see it again for 30 minutes.");
+      fetchOrders();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reject order');
     }
   };
 
@@ -342,11 +361,19 @@ const Delivery = () => {
                         <p className="text-sm text-muted-foreground">{order.profiles.phone}</p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between pt-4 border-t">
+                    <div className="flex gap-2 items-center justify-between pt-4 border-t">
                       <div className="text-lg font-bold">₹{order.total_amount.toFixed(2)}</div>
-                      <Button onClick={() => acceptOrder(order.id)}>
-                        Accept Order
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => rejectOrder(order.id, 'Not interested')}
+                        >
+                          Reject
+                        </Button>
+                        <Button onClick={() => acceptOrder(order.id)}>
+                          Accept Order
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
