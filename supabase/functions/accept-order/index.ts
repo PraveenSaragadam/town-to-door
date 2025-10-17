@@ -1,10 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -20,114 +20,93 @@ serve(async (req) => {
           headers: { Authorization: req.headers.get('Authorization')! },
         },
       }
-    )
+    );
 
-    // Get user from auth
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser()
-
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      )
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    const { orderId } = await req.json()
+    const { orderId } = await req.json();
+    console.log('Accept order request:', { orderId, userId: user.id });
 
-    if (!orderId) {
-      return new Response(
-        JSON.stringify({ error: 'Order ID is required' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
-    }
-
-    console.log(`User ${user.id} attempting to accept order ${orderId}`)
-
-    // Atomic update: Only assign if currently unassigned and ready for pickup
-    const { data: order, error: updateError } = await supabaseClient
+    // Atomic order acceptance - update only if conditions match
+    const { data: updatedOrder, error: updateError } = await supabaseClient
       .from('orders')
       .update({
         delivery_person_id: user.id,
-        status: 'picked_up',
-        updated_at: new Date().toISOString()
+        status: 'assigned',
       })
       .eq('id', orderId)
       .eq('status', 'ready_for_pickup')
       .is('delivery_person_id', null)
-      .select(`
-        *,
-        stores(name, address),
-        profiles!customer_id(full_name, phone)
-      `)
-      .single()
+      .select('*, profiles!delivery_person_id(full_name)')
+      .single();
 
-    if (updateError) {
-      console.error('Update error:', updateError)
-
+    if (updateError || !updatedOrder) {
+      console.error('Failed to assign order:', updateError);
+      
       // Check if order was already assigned
-      const { data: existingOrder } = await supabaseClient
+      const { data: assignedOrder } = await supabaseClient
         .from('orders')
-        .select(`
-          *,
-          profiles!delivery_person_id(full_name)
-        `)
+        .select('*, profiles!delivery_person_id(full_name)')
         .eq('id', orderId)
-        .single()
+        .single();
 
-      if (existingOrder && existingOrder.delivery_person_id) {
+      if (assignedOrder?.delivery_person_id && assignedOrder.delivery_person_id !== user.id) {
         return new Response(
           JSON.stringify({
             error: 'OrderAlreadyAssigned',
-            message: 'This order has already been accepted by another delivery person',
             assignedTo: {
-              id: existingOrder.delivery_person_id,
-              name: existingOrder.profiles?.full_name || 'Unknown'
+              id: assignedOrder.delivery_person_id,
+              name: assignedOrder.profiles?.full_name || 'Unknown',
             },
-            assignedAt: existingOrder.updated_at
+            assignedAt: assignedOrder.updated_at,
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
-        )
+          {
+            status: 409,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
       }
 
       return new Response(
-        JSON.stringify({ error: 'Failed to accept order', details: updateError.message }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
-    }
-
-    if (!order) {
-      return new Response(
         JSON.stringify({ error: 'Order not found or not available' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      )
+        {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
-    console.log(`Order ${orderId} successfully accepted by user ${user.id}`)
+    console.log('Order assigned successfully:', { orderId, userId: user.id });
 
-    // Return success response
     return new Response(
       JSON.stringify({
-        success: true,
-        orderId: order.id,
-        status: order.status,
+        orderId: updatedOrder.id,
+        status: updatedOrder.status,
         assignedTo: {
           id: user.id,
-          name: user.email
+          name: updatedOrder.profiles?.full_name || 'You',
         },
-        assignedAt: order.updated_at,
-        order: order
+        assignedAt: updatedOrder.updated_at,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-    )
-  } catch (error: unknown) {
-    console.error('Unexpected error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error) {
+    console.error('Error in accept-order function:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: errorMessage }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
-})
+});

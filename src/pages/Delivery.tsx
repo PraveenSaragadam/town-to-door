@@ -6,9 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { MapPin, Package, Star, CheckCircle, Truck, Sparkles } from "lucide-react";
+import { MapPin, Package, Star, CheckCircle, Truck, Sparkles, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Order {
   id: string;
@@ -35,6 +37,9 @@ const Delivery = () => {
   const [aiRouteSuggestion, setAiRouteSuggestion] = useState<string>("");
   const [loadingAI, setLoadingAI] = useState(false);
   const [earnings, setEarnings] = useState<Earnings | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectOrderId, setRejectOrderId] = useState<string>("");
+  const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -67,12 +72,14 @@ const Delivery = () => {
   const fetchOrders = async () => {
     if (!user) return;
 
-    // Available orders (ready for pickup, no delivery person assigned)
+    // Available orders (ready for pickup, no delivery person assigned, not rejected by this user)
     const { data: available } = await supabase
       .from('orders')
       .select('*, stores(name, address), profiles!customer_id(full_name, phone)')
       .eq('status', 'ready_for_pickup')
-      .is('delivery_person_id', null);
+      .is('delivery_person_id', null)
+      .not('id', 'in', 
+        `(SELECT order_id FROM order_rejections WHERE delivery_person_id = '${user.id}' AND reofferable_after > now())`);
 
     if (available) setAvailableOrders(available as any);
 
@@ -81,7 +88,7 @@ const Delivery = () => {
       .from('orders')
       .select('*, stores(name, address), profiles!customer_id(full_name, phone)')
       .eq('delivery_person_id', user.id)
-      .in('status', ['picked_up', 'delivering']);
+      .in('status', ['assigned', 'picked_up', 'delivering']);
 
     if (active) setActiveOrders(active as any);
 
@@ -143,9 +150,23 @@ const Delivery = () => {
       if (error) throw error;
 
       toast.success("Order rejected. You won't see it again for 30 minutes.");
+      setRejectDialogOpen(false);
+      setRejectOrderId("");
+      setRejectReason("");
       fetchOrders();
     } catch (error: any) {
       toast.error(error.message || 'Failed to reject order');
+    }
+  };
+
+  const handleRejectClick = (orderId: string) => {
+    setRejectOrderId(orderId);
+    setRejectDialogOpen(true);
+  };
+
+  const handleRejectConfirm = () => {
+    if (rejectOrderId) {
+      rejectOrder(rejectOrderId, rejectReason);
     }
   };
 
@@ -153,11 +174,11 @@ const Delivery = () => {
     try {
       const updates: any = { status: newStatus as any };
       
-      // If marking as delivered, set delivery earning
+      // If marking as delivered, set delivery earning (10% commission)
       if (newStatus === 'delivered') {
         const order = activeOrders.find(o => o.id === orderId);
         if (order) {
-          updates.delivery_earning = order.total_amount * 0.1; // 10% commission
+          updates.delivery_earning = order.total_amount * 0.1;
         }
       }
 
@@ -169,6 +190,7 @@ const Delivery = () => {
       if (error) throw error;
 
       const statusMessages: Record<string, string> = {
+        'picked_up': 'Order picked up! Start delivery when ready.',
         'delivering': 'Started delivery! Navigate to customer location.',
         'delivered': 'Order marked as delivered! Earnings added.'
       };
@@ -183,13 +205,14 @@ const Delivery = () => {
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "success" }> = {
-      ready_for_pickup: { label: 'Ready for Pickup', variant: 'default' },
+      ready_for_pickup: { label: 'Ready', variant: 'default' },
+      assigned: { label: 'Assigned', variant: 'secondary' },
       picked_up: { label: 'Picked Up', variant: 'secondary' },
-      delivering: { label: 'Delivering', variant: 'secondary' },
+      delivering: { label: 'In Transit', variant: 'secondary' },
       delivered: { label: 'Delivered', variant: 'success' },
     };
 
-    const { label, variant } = statusMap[status] || { label: status, variant: 'default' };
+    const { label, variant} = statusMap[status] || { label: status, variant: 'default' };
     return <Badge variant={variant as any}>{label}</Badge>;
   };
 
@@ -362,12 +385,17 @@ const Delivery = () => {
                       </div>
                     </div>
                     <div className="flex gap-2 items-center justify-between pt-4 border-t">
-                      <div className="text-lg font-bold">₹{order.total_amount.toFixed(2)}</div>
+                      <div>
+                        <div className="text-lg font-bold">₹{order.total_amount.toFixed(2)}</div>
+                        <p className="text-xs text-muted-foreground">Earn: ₹{(order.total_amount * 0.1).toFixed(2)}</p>
+                      </div>
                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
-                          onClick={() => rejectOrder(order.id, 'Not interested')}
+                          size="sm"
+                          onClick={() => handleRejectClick(order.id)}
                         >
+                          <X className="h-4 w-4 mr-1" />
                           Reject
                         </Button>
                         <Button onClick={() => acceptOrder(order.id)}>
@@ -423,6 +451,11 @@ const Delivery = () => {
                       </div>
                     </div>
                     <div className="flex gap-2 pt-4 border-t">
+                      {order.status === 'assigned' && (
+                        <Button className="flex-1" onClick={() => updateOrderStatus(order.id, 'picked_up')}>
+                          Mark as Picked Up
+                        </Button>
+                      )}
                       {order.status === 'picked_up' && (
                         <Button className="flex-1" onClick={() => updateOrderStatus(order.id, 'delivering')}>
                           Start Delivery
@@ -475,6 +508,31 @@ const Delivery = () => {
             )}
           </TabsContent>
         </Tabs>
+
+        <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reject Order</DialogTitle>
+              <DialogDescription>
+                Please provide a reason for rejecting this order. This order won't be offered to you again for 30 minutes.
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              placeholder="Enter reason for rejection..."
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="min-h-[100px]"
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRejectConfirm}>
+                Confirm Rejection
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

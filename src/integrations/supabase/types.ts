@@ -52,6 +52,41 @@ export type Database = {
           },
         ]
       }
+      delivery_history: {
+        Row: {
+          action: string
+          created_at: string | null
+          delivery_person_id: string | null
+          id: string
+          note: string | null
+          order_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          delivery_person_id?: string | null
+          id?: string
+          note?: string | null
+          order_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          delivery_person_id?: string | null
+          id?: string
+          note?: string | null
+          order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           created_at: string | null
@@ -131,6 +166,41 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_rejections: {
+        Row: {
+          delivery_person_id: string
+          id: string
+          order_id: string
+          reason: string | null
+          rejected_at: string | null
+          reofferable_after: string | null
+        }
+        Insert: {
+          delivery_person_id: string
+          id?: string
+          order_id: string
+          reason?: string | null
+          rejected_at?: string | null
+          reofferable_after?: string | null
+        }
+        Update: {
+          delivery_person_id?: string
+          id?: string
+          order_id?: string
+          reason?: string | null
+          rejected_at?: string | null
+          reofferable_after?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_rejections_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]
@@ -520,12 +590,13 @@ export type Database = {
       app_role: "customer" | "retailer" | "delivery_person"
       order_status:
         | "pending"
-        | "accepted"
-        | "preparing"
+        | "confirmed"
         | "ready_for_pickup"
+        | "assigned"
         | "picked_up"
         | "delivering"
         | "delivered"
+        | "completed"
         | "cancelled"
       product_category:
         | "groceries"
@@ -668,12 +739,13 @@ export const Constants = {
       app_role: ["customer", "retailer", "delivery_person"],
       order_status: [
         "pending",
-        "accepted",
-        "preparing",
+        "confirmed",
         "ready_for_pickup",
+        "assigned",
         "picked_up",
         "delivering",
         "delivered",
+        "completed",
         "cancelled",
       ],
       product_category: [
